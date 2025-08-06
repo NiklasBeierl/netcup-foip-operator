@@ -1,11 +1,15 @@
-from base64 import b64decode
 import logging
+import os
 import random
 from asyncio import Lock
-from zeep import Client
+from base64 import b64decode
+from datetime import UTC, datetime
 
 import kopf
-from cloudcoil.models.kubernetes.core.v1 import Secret, Node
+from cloudcoil.models.kubernetes.core.v1 import Node, Secret
+from zeep import Client
+from zeep.exceptions import Error as ZeepError
+from zeep.exceptions import Fault
 
 from netcup_foip_controller.models.v1 import FailoverIp, FailoverIpStatus
 
@@ -20,12 +24,20 @@ NODE_ANNOTATIONS = {
 }
 
 
+def timestamp() -> str:
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
 @kopf.on.startup()
 async def configure(memo: kopf.Memo, settings: kopf.OperatorSettings, **_):
-    # Peering to ensure only instance is running
+    # Peering to ensure only one instance is running
     settings.peering.name = "netcup-failover-ip"
-    # TODO: Use better source for prio
-    settings.peering.priority = int(random.random() * 1000)
+    if prio_src := os.environ.get("PEERING_PRIO"):
+        settings.peering.priority = int.from_bytes(prio_src.encode("utf-8"), "big")
+    else:
+        # Best effort: Use a random number
+        settings.peering.priority = random.randint(0, 2**16)
+
     settings.peering.clusterwide = True
     settings.peering.mandatory = True
     settings.execution.max_workers = 1
@@ -65,9 +77,9 @@ assert all(
     f"conditions.{cond}={bad_value}" in ISSUES for cond, bad_value in BAD_CONDITIONS
 )
 
-# How the nodes are sorted to choose the "best" node ...
+# When choosing the node, we sort them by their issues and ...
 SORTING = ISSUES + (
-    "name",  # ... used as a tiebreaker
+    "name",  # ... use the name as tie-breaker
 )
 
 
@@ -112,18 +124,19 @@ def get_better_node(node_index: kopf.Index, current: str | None = None) -> str |
 
 @kopf.index("failoverip.netcup.noshoes.xyz")
 async def failover_ips_by_node(name, status, **_):
-    return {status.get("assignedNodeName"): name}
+    return {status.get("desiredNode"): name}
 
 
+# We don't "resume" on nodes. We resume on foips instead...
 @kopf.on.create("node", annotations=NODE_ANNOTATIONS)
 @kopf.on.update(
     "node",
-    field="spec.unschedulable",
+    field="status.conditions",
     annotations=NODE_ANNOTATIONS,
 )
 @kopf.on.update(
     "node",
-    field="status.conditions",
+    field="spec.unschedulable",
     annotations=NODE_ANNOTATIONS,
 )
 @kopf.on.update(
@@ -141,7 +154,8 @@ async def node(memo: kopf.Memo, reason: str, name: str | None, **kwargs):
     node_data: kopf.Index = kwargs["node_data"]
     failover_ips_by_node: kopf.Index = kwargs["failover_ips_by_node"]
 
-    for node_name, foips in list(failover_ips_by_node.items()):
+    assignments = {}
+    for node_name, foips in failover_ips_by_node.items():
         for ip in foips:
             current = node_name
 
@@ -150,68 +164,132 @@ async def node(memo: kopf.Memo, reason: str, name: str | None, **kwargs):
 
             better_node = get_better_node(node_data, current=current)
             if better_node is not None:
-                logging.info(
-                    f"Will assign {ip} to {better_node} due to node {reason}"
-                )
-                await assign_node(ip, better_node, memo.change_lock)
+                logging.info(f"Will assign {ip} to {better_node} due to node {reason}")
+                assignments[ip] = better_node
+
+    async with memo.change_lock:
+        for ip, better_node in assignments.items():
+            await assign_node(ip, better_node)
 
 
-async def assign_node(ip_name: str, better_node: str, lock: Lock):
+async def assign_node(ip_name: str, node_name: str):
     failover_ip = FailoverIp.get(name=ip_name)
-    secret = Secret.get(name=failover_ip.spec.secret_name)
-    node = Node.get(name=better_node)
-    assert failover_ip is not None
-    assert secret is not None
-    assert node is not None
-    assert node.metadata is not None
-    assert node.metadata.annotations is not None
-    mac = node.metadata.annotations[MAC_ANNOT]
-    vserver_name = node.metadata.annotations[SERVERNAME_ANNOT]
-    ip = failover_ip.spec.ip
-    assert secret.data is not None
-    login_name = b64decode(secret.data["loginName"]).decode()
-    password = b64decode(secret.data["password"]).decode()
+    if failover_ip is None:
+        raise kopf.PermanentError(f"Failover ip {ip_name} not found.")
 
-    async with lock:
+    if failover_ip.status is None:
+        failover_ip.status = FailoverIpStatus()
+
+    secret_name = failover_ip.spec.secret_name
+    secret = Secret.get(name=secret_name)
+
+    # In case of issues with the secret, we just retry after the default delay
+    if secret is None:
+        raise kopf.TemporaryError(
+            f"Secret {secret_name} for failover ip {ip_name} not found."
+        )
+    if secret.data is None:
+        raise kopf.TemporaryError(f"Secret {secret_name} has no data.")
+    try:
+        login_name = b64decode(secret.data["loginName"]).decode()
+        password = b64decode(secret.data["password"]).decode()
+    except KeyError as e:
+        raise kopf.TemporaryError(f"secret {secret_name} has no .data.{e.args[0]}")
+
+    # In case of issues with the node we abort, since we watch for updates on nodes
+    node = Node.get(name=node_name)
+    if node is None:
+        raise kopf.PermanentError(f"Node {node_name} not found.")
+    if node.metadata is None or node.metadata.annotations is None:
+        raise kopf.PermanentError(f"Node {node_name} seems to have no annotations.")
+    try:
+        mac = node.metadata.annotations[MAC_ANNOT]
+        vserver_name = node.metadata.annotations[SERVERNAME_ANNOT]
+    except KeyError as e:
+        raise kopf.PermanentError(f"Node {node_name} has no annotation {e.args[0]}")
+
+    ip = failover_ip.spec.ip
+
+    failover_ip.status.desired_node = node_name
+    failover_ip = await failover_ip.async_update()
+    assert failover_ip.status is not None
+
+    try:
         client = Client(SOAP_ADDR)
         result = client.service.getVServerIPs(
             loginName=login_name,
             password=password,
             vserverName=vserver_name,
         )
-        if ip in result:
-            logging.warn(f"{ip} already assigned to {better_node} in netcup.")
-        else:
-            try:
-                client.service.changeIPRouting(
-                    loginName=login_name,
-                    password=password,
-                    routedIP=ip,
-                    routedMask=32,
-                    destinationVserverName=vserver_name,
-                    destinationInterfaceMAC=mac,
-                )
-            except Exception as ex:
-                raise
+    except ZeepError as e:
+        raise kopf.PermanentError("Failed to get vserver IPs") from e
 
-        if failover_ip.status is None:
-            failover_ip.status = FailoverIpStatus()
-        failover_ip.status.assigned_node_name = better_node
+    if ip in result:
+        logging.warn(f"{ip} already assigned to {node_name} in netcup")
+        failover_ip.status.assigned_node = node_name
+        failover_ip.status.last_sync_success = timestamp()
         await failover_ip.async_update()
+        return
 
-    logging.info(f"Assigned {ip_name} to {better_node}")
+    failover_ip.status.last_sync_attempt = timestamp()
+    failover_ip = await failover_ip.async_update()
+    assert failover_ip.status is not None
+
+    try:
+        client.service.changeIPRouting(
+            loginName=login_name,
+            password=password,
+            routedIP=ip,
+            routedMask=32,
+            destinationVserverName=vserver_name,
+            destinationInterfaceMAC=mac,
+        )
+        logging.info(f"Assigned {ip_name} to {node_name} in netcup")
+        failover_ip.status.assigned_node = node_name
+        failover_ip.status.last_sync_success = timestamp()
+        await failover_ip.async_update()
+    except Fault as e:
+        raise kopf.PermanentError(
+            f"Failed to reassign failover ip {ip_name}: {e.message} "
+            "This will be reattempted later."
+        )
 
 
-# TODO: Unassign foip if crd deleted...
+# TODO: Unassign foip if resource is deleted...
 # @kopf.on.delete("failoverip.netcup.noshoes.xyz")
 @kopf.on.resume("failoverip.netcup.noshoes.xyz")
 @kopf.on.create("failoverip.netcup.noshoes.xyz")
 @kopf.on.update("failoverip.netcup.noshoes.xyz", field="spec")
-async def foip(reason: str, memo: kopf.Memo, name: str | None, status, **kwargs):
+async def foip(
+    reason: str, memo: kopf.Memo, name: str | None, status: kopf.Status, **kwargs
+):
     assert name is not None
 
     node_data: kopf.Index = kwargs["node_data"]
-    node = get_better_node(node_data, current=status.get("assignedNodeName", None))
-    if node:
-        logging.info(f"Will assign {name} to {node} due to foip {reason}")
-        await assign_node(name, node, memo.change_lock)
+
+    # Fixing up discrepancies between desired and assigned is the timers job
+    current_node = status.get("desiredNode", None)
+    better_node = get_better_node(node_data, current=current_node)
+    if better_node:
+        logging.info(f"Will assign {name} to {better_node} due to foip {reason}")
+        async with memo.change_lock:
+            await assign_node(name, better_node)
+
+
+@kopf.timer("failoverip.netcup.noshoes.xyz", interval=30)
+async def foip_timer(name: str | None, memo: kopf.Memo, status: kopf.Status, **_):
+    assert name is not None
+
+    if not (desired := status.get("desiredNode")):
+        return
+
+    if desired != status.get("assignedNode"):
+        logging.info(f"Will assign {name} to {desired} (timer)")
+        async with memo.change_lock:
+            try:
+                await assign_node(name, desired)
+            except kopf.TemporaryError as e:
+                # Retries are done through the timer interval
+                raise kopf.PermanentError(
+                    f"Timer failed to assign {name} to {desired}"
+                ) from e

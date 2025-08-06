@@ -33,6 +33,12 @@ spec:
             status:
               type: object
               properties:
-                assignedNodeName:
+                assignedNode:
+                  type: string
+                desiredNode:
+                  type: string
+                lastSyncAttempt:
+                  type: string
+                lastSyncSuccess:
                   type: string
 ---

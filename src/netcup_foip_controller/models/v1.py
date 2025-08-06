@@ -72,8 +72,17 @@ class FailoverIpStatus(BaseModel):
         def build(self) -> "FailoverIpStatus":
             return FailoverIpStatus(**self._attrs)
 
-        def assigned_node_name(self, value: Optional[str], /) -> Self:
-            return self._set("assigned_node_name", value)
+        def assigned_node(self, value: Optional[str], /) -> Self:
+            return self._set("assigned_node", value)
+
+        def desired_node(self, value: Optional[str], /) -> Self:
+            return self._set("desired_node", value)
+
+        def last_sync_attempt(self, value: Optional[str], /) -> Self:
+            return self._set("last_sync_attempt", value)
+
+        def last_sync_success(self, value: Optional[str], /) -> Self:
+            return self._set("last_sync_success", value)
 
     class BuilderContext(BuilderContextBase["FailoverIpStatus.Builder"]):
         def model_post_init(self, __context) -> None:
@@ -101,7 +110,10 @@ class FailoverIpStatus(BaseModel):
     def list_builder(cls) -> ListBuilder:
         return GenericListBuilder[cls, cls.Builder]()  # type: ignore
 
-    assigned_node_name: Annotated[Optional[str], Field(alias="assignedNodeName")] = None
+    assigned_node: Annotated[Optional[str], Field(alias="assignedNode")] = None
+    desired_node: Annotated[Optional[str], Field(alias="desiredNode")] = None
+    last_sync_attempt: Annotated[Optional[str], Field(alias="lastSyncAttempt")] = None
+    last_sync_success: Annotated[Optional[str], Field(alias="lastSyncSuccess")] = None
 
 
 class FailoverIp(Resource):
