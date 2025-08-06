@@ -1,0 +1,65 @@
+[project]
+name = "netcup-foip-controller"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+package = true
+dependencies = [
+    "cloudcoil[kubernetes]>=0.5.8",
+    "kopf>=1.38.0",
+    "zeep[async]>=4.3.1",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.9.7",
+    "mypy>=1.15.0",
+    "cloudcoil[codegen]>=0.5.8",
+]
+
+[build-system]
+requires = ["uv_build>=0.8.5,<0.9.0"]
+build-backend = "uv_build"
+
+[tool.mypy]
+packages = ["netcup_foip_controller"]
+check_untyped_defs = true
+
+[tool.ruff]
+line-length = 88
+
+[tool.ruff.lint]
+extend-select = [
+    "F401", # Unused import
+    "I", # Imports
+    "ASYNC",
+    "D", # Docs, google style (see below)
+    "D213",  # Multiline docstrings start with newline
+    "RUF022", # Sort __all__
+]
+ignore = [
+    "D100", # Docstrings on every module
+    "D101", # Docstring on every class
+    "D102", # Docstring on every method
+    "D103", # Missing docstring for functions
+    "D104", # Docstring on every package
+    "D105", # Docstring on every dunder
+    "D106", # Docstring on every nested class
+    "D107", # Docstring on every __init__
+    "D212", #  We use D213 instead
+    # Rule demands async file operations. Those don't exist in python standard library -
+    # arguably not at all - and we do very little file I/O anyway
+    "ASYNC230"
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.isort]
+known-first-party = ["ctfroute", "ctftest"]
+
+[[tool.cloudcoil.codegen.models]]
+namespace = "src.netcup_foip_controller.models"
+crd-namespace = "xyz.noshoes.netcup"
+input = "crds.yml"
