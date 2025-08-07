@@ -5,6 +5,9 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
 package = true
+license = "GPL-2.0"
+license-files = ["LICENSE"]
+
 dependencies = [
     "cloudcoil[kubernetes]>=0.5.8",
     "kopf>=1.38.0",
