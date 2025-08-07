@@ -4,6 +4,7 @@ import random
 from asyncio import Lock
 from base64 import b64decode
 from datetime import UTC, datetime
+from hashlib import sha256
 
 import kopf
 from cloudcoil.errors import ResourceNotFound
@@ -33,7 +34,8 @@ async def configure(memo: kopf.Memo, settings: kopf.OperatorSettings, **_):
     # Peering to ensure only one instance is running
     settings.peering.name = "netcup-failover-ip"
     if prio_src := os.environ.get("PEERING_PRIO"):
-        settings.peering.priority = int.from_bytes(prio_src.encode("utf-8"), "big")
+        sha = sha256(prio_src.encode())
+        settings.peering.priority = int.from_bytes(sha.digest(), "big")
     else:
         # Best effort: Use a random number
         settings.peering.priority = random.randint(0, 2**16)
