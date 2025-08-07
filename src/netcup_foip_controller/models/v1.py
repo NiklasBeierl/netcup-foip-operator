@@ -126,7 +126,9 @@ class FailoverIp(Resource):
             return FailoverIp(**self._attrs)
 
         @overload
-        def spec(self, value_or_callback: FailoverIpSpec, /) -> "FailoverIp.Builder": ...
+        def spec(
+            self, value_or_callback: FailoverIpSpec, /
+        ) -> "FailoverIp.Builder": ...
 
         @overload
         def spec(
@@ -138,7 +140,9 @@ class FailoverIp(Resource):
         ) -> "FailoverIp.Builder": ...
 
         @overload
-        def spec(self, value_or_callback: Never = ...) -> "FailoverIpSpec.BuilderContext": ...
+        def spec(
+            self, value_or_callback: Never = ...
+        ) -> "FailoverIpSpec.BuilderContext": ...
 
         def spec(self, value_or_callback=None, /):
             if self._in_context and value_or_callback is None:
@@ -171,7 +175,9 @@ class FailoverIp(Resource):
         ) -> "FailoverIp.Builder": ...
 
         @overload
-        def status(self, value_or_callback: Never = ...) -> "FailoverIpStatus.BuilderContext": ...
+        def status(
+            self, value_or_callback: Never = ...
+        ) -> "FailoverIpStatus.BuilderContext": ...
 
         def status(self, value_or_callback=None, /):
             if self._in_context and value_or_callback is None:
@@ -189,7 +195,9 @@ class FailoverIp(Resource):
                     value = output
             return self._set("status", value)
 
-        def api_version(self, value: Optional[Literal["netcup.noshoes.xyz/v1"]], /) -> Self:
+        def api_version(
+            self, value: Optional[Literal["netcup.noshoes.xyz/v1"]], /
+        ) -> Self:
             return self._set("api_version", value)
 
         def kind(self, value: Optional[Literal["FailoverIp"]], /) -> Self:
