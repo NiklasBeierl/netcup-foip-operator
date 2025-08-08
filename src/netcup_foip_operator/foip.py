@@ -43,7 +43,6 @@ async def configure(memo: kopf.Memo, settings: kopf.OperatorSettings, **_):
         # Best effort: Use a random number
         settings.peering.priority = random.randint(0, 2**16)
 
-
     # Prevent async races when changing a failover ip
     memo.change_lock = Lock()
 
@@ -87,8 +86,6 @@ SORTING = ISSUES + (
 
 @kopf.index(
     "node",
-    # Coroutine raised StopIteration??
-    # field=["spec.unschedulable", "name", "status.conditions"],
     annotations=NODE_ANNOTATIONS,
 )
 async def node_issues(name, status, spec, **_):
@@ -135,7 +132,10 @@ async def failover_ips_by_node(name: str | None, status: kopf.Status, **_):
 
 
 # We don't resume on nodes. We resume on foips instead
-@kopf.on.create("node", annotations=NODE_ANNOTATIONS)
+@kopf.on.create(
+    "node",
+    annotations=NODE_ANNOTATIONS,
+)
 @kopf.on.update(
     "node",
     field=[
@@ -278,11 +278,13 @@ async def assign_node(ip_name: str, node_name: str):
 # @kopf.on.delete("failoverip.netcup.noshoes.xyz")
 @kopf.on.resume("failoverip.netcup.noshoes.xyz")
 @kopf.on.create("failoverip.netcup.noshoes.xyz")
-@kopf.on.update("failoverip.netcup.noshoes.xyz", field="spec")
+@kopf.on.update(
+    "failoverip.netcup.noshoes.xyz",
+    field="spec",
+)
 async def foip(
     reason: str, memo: kopf.Memo, name: str | None, status: kopf.Status, **kwargs
 ):
-    # TODO: Add ip address to interface through pyroute
     assert name is not None
 
     node_issues: kopf.Index = kwargs["node_issues"]
@@ -296,7 +298,11 @@ async def foip(
             await assign_node(name, better_node)
 
 
-@kopf.timer("failoverip.netcup.noshoes.xyz", retries=1, interval=30)
+@kopf.timer(
+    "failoverip.netcup.noshoes.xyz",
+    retries=1,
+    interval=30,
+)
 async def foip_timer(name: str | None, memo: kopf.Memo, status: kopf.Status, **_):
     assert name is not None
 

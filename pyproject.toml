@@ -11,6 +11,7 @@ license-files = ["LICENSE"]
 dependencies = [
     "cloudcoil[kubernetes]>=0.5.8",
     "kopf>=1.38.0",
+    "pyroute2>=0.9.4",
     "zeep[async]>=4.3.1",
 ]
 
@@ -28,6 +29,11 @@ build-backend = "uv_build"
 [tool.mypy]
 packages = ["netcup_foip_operator"]
 check_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = ["pyroute2.*"]
+ignore_missing_imports = true
+ignore_errors = true
 
 [tool.ruff]
 line-length = 88

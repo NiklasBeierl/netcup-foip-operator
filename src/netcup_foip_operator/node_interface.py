@@ -2,12 +2,34 @@ import logging
 import os
 
 import kopf
+from pyroute2 import NDB
+from pyroute2.ndb.objects.interface import SyncInterface
 
 from netcup_foip_operator import MAC_ANNOT, NODE_ANNOTATIONS
 
 
-def ensure_ip_assigned(mac: str, ip: str):
-    logging.info(f"Adding {ip} to interface with {mac}")
+def get_ifname_with_mac(ndb: NDB, mac: str) -> str | None:
+    for interface in ndb.interfaces:
+        if interface.address.lower() == mac.lower():
+            return interface.ifname
+
+    return None
+
+
+async def ensure_ip_assigned(mac: str, ip: str):
+    with NDB() as ndb:
+        ifname = get_ifname_with_mac(ndb, mac)
+        if ifname is None:
+            logging.error(f"Could not find interface with MAC {mac}")
+            return
+
+        iface: SyncInterface
+        with ndb.interfaces[ifname] as iface:
+            if iface.ipaddr.exists(ip):
+                logging.info(f"Interface {ifname} already has {ip}")
+            else:
+                iface.ensure_ip(ip)
+                logging.info(f"Assigned {ip} to {ifname} ({mac})")
 
 
 @kopf.on.startup()
@@ -15,8 +37,7 @@ async def configure(memo: kopf.Memo, settings: kopf.OperatorSettings, **_):
     settings.posting.enabled = False
 
     settings.persistence.diffbase_storage = kopf.AnnotationsDiffBaseStorage(
-        prefix="netcup.noshoes.xyz",
-        key="last-handled-node-interface"
+        prefix="netcup.noshoes.xyz", key="last-handled-node-interface"
     )
     settings.persistence.finalizer = "netcup.noshoes.xyz/node-interface"
 
@@ -28,20 +49,32 @@ async def configure(memo: kopf.Memo, settings: kopf.OperatorSettings, **_):
         memo.node_name = node_name
 
 
-@kopf.index("failoverip.netcup.noshoes.xyz", field=["spec.ip", "name"])
+@kopf.index(
+    "failoverip.netcup.noshoes.xyz",
+    field=["spec.ip"],
+)
 async def failover_ips(name: str | None, spec: kopf.Spec, **_):
     return {name: spec.get("ip")}
 
 
 @kopf.index(
-    "node", field=["name", f"annotations.{MAC_ANNOT}"], annotations=NODE_ANNOTATIONS
+    "node",
+    annotations=NODE_ANNOTATIONS,
 )
 async def node_macs(name: str | None, annotations: kopf.Annotations, **_):
     return {name: annotations[MAC_ANNOT]}
 
 
-# @kopf.on.create("node", annotations=NODE_ANNOTATIONS)
-# @kopf.on.update("node", field=f"annotations.{MAC_ANNOT}", annotations=NODE_ANNOTATIONS)
+# If a node is deleted we probably aren't running on it anymore :)
+@kopf.on.create(
+    "node",
+    annotations=NODE_ANNOTATIONS,
+)
+@kopf.on.update(
+    "node",
+    field=f"annotations.{MAC_ANNOT}",
+    annotations=NODE_ANNOTATIONS,
+)
 async def node(
     memo: kopf.Memo,
     annotations: kopf.Annotations,
@@ -49,21 +82,27 @@ async def node(
     **kwargs,
 ):
     failover_ips: kopf.Index = kwargs["failover_ips"]
-    if name == memo.node_name and (mac := annotations.get(MAC_ANNOT, None)):
+    if name == memo.node_name:
+        # Local mac annotation changed
+        mac = annotations.get(MAC_ANNOT)
+        assert mac is not None
+
         for (ip,) in failover_ips.values():
-            ensure_ip_assigned(mac, ip)
+            await ensure_ip_assigned(mac, ip)
 
 
+# @kopf.on.delete("failoverip.netcup.noshoes.xyz")
 @kopf.on.resume("failoverip.netcup.noshoes.xyz")
 @kopf.on.create("failoverip.netcup.noshoes.xyz")
-@kopf.on.update("failoverip.netcup.noshoes.xyz", field="spec")
+@kopf.on.update(
+    "failoverip.netcup.noshoes.xyz",
+    field="spec.ip",
+)
 async def foip(memo: kopf.Memo, spec: kopf.Spec, **kwargs):
-    # This needs to be an entirely separate controller, because the foip controller will
-    # ideally only run on one instance, whereas the ip address assignment needs to happen
-    # on all nodes!
-    # On the up-side, this makes everything a lot easier, we just listen to
-    # changes of the foips and assign them on any interface with a suitable mac
+    ip = spec.get("ip")
+    assert ip is not None
     node_macs: kopf.Index = kwargs["node_macs"]
-    if (macs := node_macs.get(memo.node_name, None)) and (ip := spec.get("ip")):
+    if macs := node_macs.get(memo.node_name, None):
+        # There should only be one
         (mac,) = macs
-        ensure_ip_assigned(mac, ip)
+        await ensure_ip_assigned(mac, ip)
