@@ -24,9 +24,14 @@ def timestamp() -> str:
 
 @kopf.on.startup()
 async def configure(memo: kopf.Memo, settings: kopf.OperatorSettings, **_):
+    settings.posting.enabled = False
+
     settings.persistence.diffbase_storage = kopf.AnnotationsDiffBaseStorage(
+        prefix="netcup.noshoes.xyz",
         key="last-handled-foip",
     )
+    settings.persistence.finalizer = "netcup.noshoes.xyz/foip"
+
     # Peering to ensure only one instance is running
     settings.peering.clusterwide = True
     settings.peering.mandatory = True
@@ -38,7 +43,6 @@ async def configure(memo: kopf.Memo, settings: kopf.OperatorSettings, **_):
         # Best effort: Use a random number
         settings.peering.priority = random.randint(0, 2**16)
 
-    settings.posting.enabled = False
 
     # Prevent async races when changing a failover ip
     memo.change_lock = Lock()

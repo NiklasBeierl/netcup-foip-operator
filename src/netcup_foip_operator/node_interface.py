@@ -13,9 +13,12 @@ def ensure_ip_assigned(mac: str, ip: str):
 @kopf.on.startup()
 async def configure(memo: kopf.Memo, settings: kopf.OperatorSettings, **_):
     settings.posting.enabled = False
+
     settings.persistence.diffbase_storage = kopf.AnnotationsDiffBaseStorage(
-        key="last-handled-node-interface",
+        prefix="netcup.noshoes.xyz",
+        key="last-handled-node-interface"
     )
+    settings.persistence.finalizer = "netcup.noshoes.xyz/node-interface"
 
     node_name = os.environ.get("NODE_NAME")
     if not node_name:
