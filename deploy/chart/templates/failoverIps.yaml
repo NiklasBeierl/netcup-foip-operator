@@ -1,0 +1,10 @@
+{{ range $foip := .Values.failoverIps }}
+---
+apiVersion: netcup.noshoes.xyz/v1
+kind: FailoverIp
+metadata:
+  name: {{ $foip.name }}
+spec:
+  ip: {{ $foip.ip }}
+  secretName: {{ $foip.secretName }}
+{{ end }}
