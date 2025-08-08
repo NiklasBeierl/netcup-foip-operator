@@ -16,5 +16,3 @@ COPY src ./src/
 COPY README.md .
 COPY LICENSE .
 RUN uv sync --compile-bytecode --active
-
-CMD kopf run -m netcup_foip_operator
