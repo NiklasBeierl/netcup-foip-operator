@@ -12,7 +12,7 @@ from cloudcoil.models.kubernetes.core.v1 import Node, Secret
 from zeep import Client
 from zeep.exceptions import Error as ZeepError
 
-from netcup_foip_controller.models.v1 import FailoverIp, FailoverIpStatus
+from netcup_foip_operator.models.v1 import FailoverIp, FailoverIpStatus
 
 SOAP_ADDR = "https://www.servercontrolpanel.de/WSEndUser?wsdl"
 MAC_ANNOT = "netcup.noshoes.xyz/primary-mac"
@@ -26,6 +26,7 @@ NODE_ANNOTATIONS = {
 
 # Log-spam from liveness check
 logging.getLogger("aiohttp.access").setLevel(logging.ERROR)
+
 
 def timestamp() -> str:
     return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")

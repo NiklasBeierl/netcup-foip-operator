@@ -550,7 +550,7 @@ wheels = [
 ]
 
 [[package]]
-name = "netcup-foip-controller"
+name = "netcup-foip-operator"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
