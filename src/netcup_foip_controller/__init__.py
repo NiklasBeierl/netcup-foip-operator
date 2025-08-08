@@ -24,6 +24,8 @@ NODE_ANNOTATIONS = {
     SERVERNAME_ANNOT: kopf.PRESENT,
 }
 
+# Log-spam from liveness check
+logging.getLogger("aiohttp.access").setLevel(logging.ERROR)
 
 def timestamp() -> str:
     return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
