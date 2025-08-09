@@ -11,7 +11,6 @@ env:
   REGISTRY: ghcr.io
   USERNAME: ${{ github.actor }}
   PASSWORD: ${{ secrets.GITHUB_TOKEN }}
-  CHART_REPO: ${{ github.repository }}-chart
 
 jobs:
   build-and-push-image:
@@ -34,6 +33,13 @@ jobs:
         shell: bash
         run: helm package -d '${{ runner.temp }}' deploy/chart
 
+      - name: Assemble chart repo
+        id: chartRepo
+        env:
+          OWNER: ${{ github.repository_owner }}
+        shell: bash
+        run: echo "value=oci://$REGISTRY/${OWNER,,}">>${GITHUB_OUTPUT}
+
       - name: Helm | Push
         shell: bash
-        run: helm push ${{ runner.temp }}/*.tgz 'oci://${{ env.REGISTRY }}/${{ github.repository_owner }}'
+        run: helm push ${{ runner.temp }}/*.tgz '${{ steps.chartRepo.value }}'
