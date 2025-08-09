@@ -5,6 +5,14 @@ on:
     branches: ['main']
     tags:
       - "v*"
+    paths:
+      - Dockerfile
+      - src/**
+      - pyproject.toml
+      - uv.lock
+      - README.md
+      - LICENSE
+      - .github/containerimage.yml
 
 env:
   REGISTRY: ghcr.io
