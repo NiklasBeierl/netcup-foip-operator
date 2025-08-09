@@ -1,0 +1,39 @@
+name: Package and publish the helm chart
+
+on:
+  push:
+    branches: ['main']
+    paths:
+      - deploy/chart/**
+      - .github/helmchart.yml
+
+env:
+  REGISTRY: ghcr.io
+  USERNAME: ${{ github.actor }}
+  PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+  CHART_REPO: ${{ github.repository }}-chart
+
+jobs:
+  build-and-push-image:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Helm | Login
+        shell: bash
+        run: | 
+          echo '${{ secrets.GITHUB_TOKEN }}' | helm registry login \
+          --username '${{ github.actor }}' --password-stdin '${{ env.REGISTRY }}'
+
+      - name: Helm | Package
+        shell: bash
+        run: helm package -d '${{ runner.temp }}' deploy/chart
+
+      - name: Helm | Push
+        shell: bash
+        run: helm push ${{ runner.temp }}/*.tgz 'oci://${{ env.REGISTRY }}/${{ github.repository_owner }}'

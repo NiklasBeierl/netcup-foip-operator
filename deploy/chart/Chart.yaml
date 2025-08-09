@@ -1,5 +1,5 @@
 apiVersion: v2
-name: netcup-foip-operator
+name: netcup-foip-operator-chart
 description: Keep a netcup failover ip assigned to healthy nodes.
 
 type: application
