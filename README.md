@@ -75,7 +75,20 @@ kubectl create secret generic netcup-webservice-credentials \
 
 ### Installing the chart
 
-TODO
+The chart is published on the github oci registry as: 
+`oci://ghcr.io/niklasbeierl/netcup-foip-operator` 
+
+You can get the default values via:
+
+`helm show values oci://ghcr.io/niklasbeierl/netcup-foip-operator:0.2.0`
+
+(Note the version!)
+
+You can customize the values to your liking, and even already specify your floating ips
+in there (see next step). But you can also install it with defaults and it should work.
+
+`helm install netcup-foip oci://ghcr.io/niklasbeierl/netcup-foip-operator:0.2.0`
+
 
 ### Adding failover IPs
 
@@ -93,6 +106,27 @@ spec:
   # make sure to reference the secret correctly
   # the FailoverIp and secret need to be in the same namespace as the chart installation
   secretName: netcup-failover-credentials
+```
+
+### Checking the status of your failover IP
+
+The controller will populate the `status` field of the failoverip crd:
+
+```sh
+M ~/c/p/netcup-foip-operator kubectl describe foip                                                                                    main ✱
+Name:         myfailoverip
+
+...                
+ 
+Spec:
+  Ip:           1.1.1.1
+  Secret Name:  netcup-webservice-credentials
+Status:
+  Assigned Node:      node-1
+  Desired Node:       node-1
+  Last Sync Attempt:  2025-08-09T19:36:29Z
+  Last Sync Success:  2025-08-09T19:36:30Z
+
 ```
 
 ## Troubleshooting
