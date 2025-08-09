@@ -1,1 +1,1 @@
-deploy/chart/crds/crds.yml
+charts/netcup-foip-operator/crds/crds.yml
