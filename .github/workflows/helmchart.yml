@@ -33,7 +33,7 @@ jobs:
         shell: bash
         run: helm package -d '${{ runner.temp }}' deploy/chart
 
-      - name: Assemble chart repo
+      - name: Assemble chart repo name
         id: chartRepo
         env:
           OWNER: ${{ github.repository_owner }}
