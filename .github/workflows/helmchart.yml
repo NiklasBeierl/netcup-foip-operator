@@ -37,9 +37,9 @@ jobs:
         id: chartRepo
         env:
           OWNER: ${{ github.repository_owner }}
-        shell: bash
-        run: echo "value=oci://$REGISTRY/${OWNER,,}">>${GITHUB_OUTPUT}
+          REGISTRY: ${{ env.REGISTRY }}
+        run: echo "value=oci://${REGISTRY}/${OWNER,,}" >> $GITHUB_OUTPUT
 
       - name: Helm | Push
         shell: bash
-        run: helm push ${{ runner.temp }}/*.tgz '${{ steps.chartRepo.value }}'
+        run: helm push ${{ runner.temp }}/*.tgz '${{ steps.chartRepo.outputs.value }}'
