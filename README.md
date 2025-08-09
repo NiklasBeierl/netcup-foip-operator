@@ -182,11 +182,9 @@ spec:
 The operator will populate the `status` field of the failoverip crd:
 
 ```sh
-M ~/c/p/netcup-foip-operator kubectl describe foip                                                                                    main ✱
-Name:         myfailoverip
-
-...                
- 
+$ kubectl describe foip
+Name: myfailoverip 
+...                 
 Spec:
   Ip:           1.1.1.1
   Secret Name:  netcup-webservice-credentials
@@ -195,7 +193,6 @@ Status:
   Desired Node:       node-1
   Last Sync Attempt:  2025-08-09T19:36:29Z
   Last Sync Success:  2025-08-09T19:36:30Z
-
 ```
 
 ## Troubleshooting
