@@ -5,7 +5,7 @@ on:
     branches: ['main']
     paths:
       - deploy/chart/**
-      - .github/helmchart.yml
+      - .github/workflows/helmchart.yml
 
 env:
   REGISTRY: ghcr.io
