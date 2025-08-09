@@ -138,12 +138,6 @@ async def failover_ips_by_node(name: str | None, status: kopf.Status, **_):
 )
 @kopf.on.update(
     "node",
-    field=[
-        "status.conditions",
-        f"annotations.{MAC_ANNOT}",
-        f"annotations.{SERVERNAME_ANNOT}",
-        "spec.unschedulable",
-    ],
     annotations=NODE_ANNOTATIONS,
 )
 @kopf.on.delete("node", annotations=NODE_ANNOTATIONS)
