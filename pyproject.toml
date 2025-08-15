@@ -69,6 +69,6 @@ convention = "google"
 known-first-party = ["ctfroute", "ctftest"]
 
 [[tool.cloudcoil.codegen.models]]
-namespace = "src.netcup_foip_controller.models"
+namespace = "src.netcup_foip_operator.models"
 crd-namespace = "xyz.noshoes.netcup"
 input = "crds.yml"
