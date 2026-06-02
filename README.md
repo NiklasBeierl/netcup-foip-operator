@@ -1,3 +1,10 @@
+# Archived
+
+> [!IMPORTANT]
+> This operator is no longer usable as it was built to target netcup's  now defunct SOAP
+> API. Since it was also quite memory hungry, I have since re-written it in go. 
+> See [here](https://github.com/NiklasBeierl/foip-operator).
+
 # netcup failover-IP operator
 
 This operator monitors node objects and assigns netcup failover IPs to one of the
